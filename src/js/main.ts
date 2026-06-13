@@ -1,12 +1,20 @@
-// 重写 fetch 拦截请求，适配 aa / ab 分片
+// 修复TS类型错误 + 适配 aa / ab 分片
 const originalFetch = window.fetch;
 
 window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-  const url = typeof input === 'string' ? input : input.url;
-  const targetName = 'soffice.data.gz';
+  let reqUrl = '';
+  // 兼容 string / Request / URL 三种类型
+  if (typeof input === 'string') {
+    reqUrl = input;
+  } else if ('url' in input) {
+    reqUrl = input.url;
+  } else {
+    reqUrl = input.href;
+  }
 
-  if (url.includes(targetName)) {
-    const baseUrl = url.replace(targetName, '');
+  const targetName = 'soffice.data.gz';
+  if (reqUrl.includes(targetName)) {
+    const baseUrl = reqUrl.replace(targetName, '');
     const chunks = ['aa', 'ab'];
     const buffers: ArrayBuffer[] = [];
 
@@ -16,7 +24,6 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
       buffers.push(await res.arrayBuffer());
     }
 
-    // 合并分片
     let total = 0;
     buffers.forEach(b => total += b.byteLength);
     const merged = new Uint8Array(total);
@@ -35,8 +42,6 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
 
   return originalFetch(input, init);
 };
-
-
 
 
 
