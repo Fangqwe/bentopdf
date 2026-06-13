@@ -1,5 +1,57 @@
-// 修复TS类型错误 + 适配 aa / ab 分片
+// 修复TS类型错误 + 适配分片
 const originalFetch = window.fetch;
+
+// 生成分片名称的函数
+function getChunkName(index: number): string {
+  const firstChar = String.fromCharCode(97 + Math.floor(index / 26));
+  const secondChar = String.fromCharCode(97 + (index % 26));
+  return firstChar + secondChar;
+}
+
+// 动态加载所有分片
+async function loadChunks(baseUrl: string, targetName: string, init?: RequestInit): Promise<ArrayBuffer> {
+  const buffers: ArrayBuffer[] = [];
+  let chunkIndex = 0;
+  let hasMoreChunks = true;
+  
+  while (hasMoreChunks) {
+    const chunkName = getChunkName(chunkIndex);
+    const chunkUrl = `${baseUrl}${targetName}.${chunkName}`;
+    
+    try {
+      console.log(`[Fetch] Loading chunk: ${chunkName} from ${chunkUrl}`);
+      const res = await originalFetch(chunkUrl, init);
+      if (res.ok) {
+        buffers.push(await res.arrayBuffer());
+        chunkIndex++;
+      } else if (chunkIndex === 0) {
+        throw new Error(`First chunk ${chunkName} not found: ${res.status}`);
+      } else {
+        hasMoreChunks = false;
+      }
+    } catch (error) {
+      if (chunkIndex === 0) throw error;
+      hasMoreChunks = false;
+    }
+  }
+  
+  if (buffers.length === 0) {
+    throw new Error(`No chunks found for ${targetName}`);
+  }
+  
+  // 合并所有分片
+  let total = 0;
+  buffers.forEach(b => total += b.byteLength);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const b of buffers) {
+    merged.set(new Uint8Array(b), offset);
+    offset += b.byteLength;
+  }
+  
+  console.log(`[Fetch] Merged ${buffers.length} chunks, total: ${total} bytes (${(total / 1024 / 1024).toFixed(2)} MB)`);
+  return merged.buffer;
+}
 
 window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
   let reqUrl = '';
@@ -12,77 +64,44 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     reqUrl = input.href;
   }
 
-  const targetName = 'soffice.data.gz';
+  const dataTargetName = 'soffice.data.gz';
   const wasmTargetName = 'soffice.wasm.gz';
   
   // 处理 soffice.data.gz 分片
-  if (reqUrl.includes(targetName)) {
-    const baseUrl = reqUrl.replace(targetName, '');
-    const chunks = ['aa', 'ab'];
-    const buffers: ArrayBuffer[] = [];
-
-    for (const chunk of chunks) {
-      const res = await originalFetch(`${baseUrl}${targetName}.${chunk}`, init);
-      if (!res.ok) throw new Error(`分片 ${chunk} 加载失败`);
-      buffers.push(await res.arrayBuffer());
+  if (reqUrl.includes(dataTargetName) && !reqUrl.includes(`${dataTargetName}.`)) {
+    const baseUrl = reqUrl.replace(dataTargetName, '');
+    try {
+      const mergedBuffer = await loadChunks(baseUrl, dataTargetName, init);
+      return new Response(mergedBuffer, {
+        headers: {
+          'Content-Type': 'application/octet-stream'
+        }
+      });
+    } catch (error) {
+      console.error('[Fetch] Failed to load data chunks:', error);
+      throw error;
     }
-
-    let total = 0;
-    buffers.forEach(b => total += b.byteLength);
-    const merged = new Uint8Array(total);
-    let offset = 0;
-    for (const b of buffers) {
-      merged.set(new Uint8Array(b), offset);
-      offset += b.byteLength;
-    }
-
-    return new Response(merged.buffer, {
-      headers: {
-        'Content-Type': 'application/octet-stream'
-      }
-    });
   }
   
   // 处理 soffice.wasm.gz 分片
-  if (reqUrl.includes(wasmTargetName)) {
+  if (reqUrl.includes(wasmTargetName) && !reqUrl.includes(`${wasmTargetName}.`)) {
     const baseUrl = reqUrl.replace(wasmTargetName, '');
-    // 根据实际文件大小确定分片数量和名称
-    // 46.5 MB / 25 MB ≈ 2 个分片不够（需要3个）
-    const chunks = ['aa', 'ab', 'ac']; // 3个分片，每个约15.5MB
-    const buffers: ArrayBuffer[] = [];
-
-    for (const chunk of chunks) {
-      const chunkUrl = `${baseUrl}${wasmTargetName}.${chunk}`;
-      console.log(`[Fetch] Loading WASM chunk: ${chunkUrl}`);
-      const res = await originalFetch(chunkUrl, init);
-      if (!res.ok) {
-        throw new Error(`WASM分片 ${chunk} 加载失败: ${res.status}`);
-      }
-      buffers.push(await res.arrayBuffer());
+    try {
+      const mergedBuffer = await loadChunks(baseUrl, wasmTargetName, init);
+      return new Response(mergedBuffer, {
+        headers: {
+          'Content-Type': 'application/wasm',
+          'Content-Encoding': 'gzip'
+        }
+      });
+    } catch (error) {
+      console.error('[Fetch] Failed to load WASM chunks:', error);
+      throw error;
     }
-
-    let total = 0;
-    buffers.forEach(b => total += b.byteLength);
-    const merged = new Uint8Array(total);
-    let offset = 0;
-    for (const b of buffers) {
-      merged.set(new Uint8Array(b), offset);
-      offset += b.byteLength;
-    }
-    
-    console.log(`[Fetch] WASM merged: ${total} bytes (${(total / 1024 / 1024).toFixed(2)} MB)`);
-
-    return new Response(merged.buffer, {
-      headers: {
-        'Content-Type': 'application/wasm',
-        'Content-Encoding': 'gzip'
-      }
-    });
   }
 
   return originalFetch(input, init);
 };
-
 
 
 import { categories } from './config/tools.js';

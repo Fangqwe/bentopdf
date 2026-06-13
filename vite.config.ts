@@ -3,7 +3,6 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import http from 'http';
 import https from 'https';
 import type { Connect, Plugin } from 'vite';
-// import basicSsl from '@vitejs/plugin-basic-ssl';
 import tailwindcss from '@tailwindcss/vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
@@ -450,6 +449,46 @@ function rewriteHtmlPathsPlugin(): Plugin {
   };
 }
 
+// 添加这个插件来删除大文件
+function removeLargeWasmFilesPlugin(): Plugin {
+  return {
+    name: 'remove-large-wasm-files',
+    enforce: 'post',
+    writeBundle(options) {
+      const outDir = options.dir;
+      if (!outDir) return;
+      
+      // 删除原始的大文件
+      const largeFiles = [
+        'libreoffice-wasm/soffice.wasm.gz',
+        'libreoffice-wasm/soffice.data.gz',
+        'libreoffice-wasm/soffice.wasm',
+        'libreoffice-wasm/soffice.data'
+      ];
+      
+      for (const file of largeFiles) {
+        const filePath = resolve(outDir, file);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          console.log(`[build] Removed large file: ${file}`);
+        }
+      }
+      
+      // 验证分片文件存在
+      const wasmDir = resolve(outDir, 'libreoffice-wasm');
+      if (fs.existsSync(wasmDir)) {
+        const files = fs.readdirSync(wasmDir);
+        const wasmChunks = files.filter(f => f.startsWith('soffice.wasm.gz.'));
+        const dataChunks = files.filter(f => f.startsWith('soffice.data.gz.'));
+        console.log(`[build] WASM chunks: ${wasmChunks.length}, Data chunks: ${dataChunks.length}`);
+        if (wasmChunks.length > 0) {
+          console.log(`[build] Chunks found: ${wasmChunks.join(', ')}`);
+        }
+      }
+    }
+  };
+}
+
 export default defineConfig(() => {
   const USE_CDN = process.env.VITE_USE_CDN === 'true';
 
@@ -464,12 +503,21 @@ export default defineConfig(() => {
       src: 'node_modules/embedpdf-snippet/dist/pdfium.wasm',
       dest: 'embedpdf',
     },
+    // 复制 WASM 分片文件 (aa, ab, ac, ad, etc.)
+    {
+      src: 'public/libreoffice-wasm/soffice.wasm.gz.??',
+      dest: 'libreoffice-wasm',
+    },
+    // 复制 Data 分片文件
+    {
+      src: 'public/libreoffice-wasm/soffice.data.gz.??',
+      dest: 'libreoffice-wasm',
+    },
   ];
 
   return {
     base: (process.env.BASE_URL || '/').replace(/\/?$/, '/'),
     plugins: [
-      // basicSsl(),
       handlebars({
         partialDirectory: resolve(__dirname, 'src/partials'),
         context: {
@@ -496,6 +544,7 @@ export default defineConfig(() => {
       viteStaticCopy({
         targets: staticCopyTargets,
       }),
+      removeLargeWasmFilesPlugin(), // 添加这个插件来删除原始大文件
       viteCompression({
         algorithm: 'brotliCompress',
         ext: '.br',
@@ -573,7 +622,7 @@ export default defineConfig(() => {
           'pdf-editor': resolve(__dirname, 'pdf-editor.html'),
           'pdf-security': resolve(__dirname, 'pdf-security.html'),
           'pdf-merge-split': resolve(__dirname, 'pdf-merge-split.html'),
-          // Tool Pages
+          // Tool Pages (保持原有配置)
           bookmark: resolve(__dirname, 'src/pages/bookmark.html'),
           'table-of-contents': resolve(
             __dirname,
@@ -711,82 +760,4 @@ export default defineConfig(() => {
           'pdf-layers': resolve(__dirname, 'src/pages/pdf-layers.html'),
           'pdf-to-pdfa': resolve(__dirname, 'src/pages/pdf-to-pdfa.html'),
           'odt-to-pdf': resolve(__dirname, 'src/pages/odt-to-pdf.html'),
-          'csv-to-pdf': resolve(__dirname, 'src/pages/csv-to-pdf.html'),
-          'rtf-to-pdf': resolve(__dirname, 'src/pages/rtf-to-pdf.html'),
-          'word-to-pdf': resolve(__dirname, 'src/pages/word-to-pdf.html'),
-          'excel-to-pdf': resolve(__dirname, 'src/pages/excel-to-pdf.html'),
-          'powerpoint-to-pdf': resolve(
-            __dirname,
-            'src/pages/powerpoint-to-pdf.html'
-          ),
-          'pdf-booklet': resolve(__dirname, 'src/pages/pdf-booklet.html'),
-          'xps-to-pdf': resolve(__dirname, 'src/pages/xps-to-pdf.html'),
-          'mobi-to-pdf': resolve(__dirname, 'src/pages/mobi-to-pdf.html'),
-          'epub-to-pdf': resolve(__dirname, 'src/pages/epub-to-pdf.html'),
-          'fb2-to-pdf': resolve(__dirname, 'src/pages/fb2-to-pdf.html'),
-          'cbz-to-pdf': resolve(__dirname, 'src/pages/cbz-to-pdf.html'),
-          'wpd-to-pdf': resolve(__dirname, 'src/pages/wpd-to-pdf.html'),
-          'wps-to-pdf': resolve(__dirname, 'src/pages/wps-to-pdf.html'),
-          'xml-to-pdf': resolve(__dirname, 'src/pages/xml-to-pdf.html'),
-          'pages-to-pdf': resolve(__dirname, 'src/pages/pages-to-pdf.html'),
-          'odg-to-pdf': resolve(__dirname, 'src/pages/odg-to-pdf.html'),
-          'ods-to-pdf': resolve(__dirname, 'src/pages/ods-to-pdf.html'),
-          'odp-to-pdf': resolve(__dirname, 'src/pages/odp-to-pdf.html'),
-          'pub-to-pdf': resolve(__dirname, 'src/pages/pub-to-pdf.html'),
-          'vsd-to-pdf': resolve(__dirname, 'src/pages/vsd-to-pdf.html'),
-          'psd-to-pdf': resolve(__dirname, 'src/pages/psd-to-pdf.html'),
-          'pdf-to-svg': resolve(__dirname, 'src/pages/pdf-to-svg.html'),
-          'extract-tables': resolve(__dirname, 'src/pages/extract-tables.html'),
-          'pdf-to-csv': resolve(__dirname, 'src/pages/pdf-to-csv.html'),
-          'pdf-to-excel': resolve(__dirname, 'src/pages/pdf-to-excel.html'),
-          'pdf-to-text': resolve(__dirname, 'src/pages/pdf-to-text.html'),
-          'digital-sign-pdf': resolve(
-            __dirname,
-            'src/pages/digital-sign-pdf.html'
-          ),
-          'timestamp-pdf': resolve(__dirname, 'src/pages/timestamp-pdf.html'),
-          'validate-signature-pdf': resolve(
-            __dirname,
-            'src/pages/validate-signature-pdf.html'
-          ),
-          'email-to-pdf': resolve(__dirname, 'src/pages/email-to-pdf.html'),
-          'font-to-outline': resolve(
-            __dirname,
-            'src/pages/font-to-outline.html'
-          ),
-          'deskew-pdf': resolve(__dirname, 'src/pages/deskew-pdf.html'),
-          'wasm-settings': resolve(__dirname, 'src/pages/wasm-settings.html'),
-          'bates-numbering': resolve(
-            __dirname,
-            'src/pages/bates-numbering.html'
-          ),
-        },
-        output: {
-          assetFileNames: (assetInfo) => {
-            const name = assetInfo.names?.[0] ?? '';
-            if (name.endsWith('.mjs')) {
-              return 'assets/[name]-[hash].js';
-            }
-            return 'assets/[name]-[hash][extname]';
-          },
-        },
-      },
-    },
-    test: {
-      globals: true,
-      environment: 'jsdom',
-      setupFiles: './src/tests/setup.ts',
-      coverage: {
-        provider: 'v8' as const,
-        reporter: ['text', 'json', 'html'],
-        exclude: [
-          'node_modules/',
-          'src/tests/',
-          '*.config.ts',
-          '**/*.d.ts',
-          'dist/',
-        ],
-      },
-    },
-  };
-});
+          'csv-to-pdf': resolve(__dirname
