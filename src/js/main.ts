@@ -1,3 +1,46 @@
+// 重写 fetch 拦截请求，适配 aa / ab 分片
+const originalFetch = window.fetch;
+
+window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
+  const url = typeof input === 'string' ? input : input.url;
+  const targetName = 'soffice.data.gz';
+
+  if (url.includes(targetName)) {
+    const baseUrl = url.replace(targetName, '');
+    const chunks = ['aa', 'ab'];
+    const buffers: ArrayBuffer[] = [];
+
+    for (const chunk of chunks) {
+      const res = await originalFetch(`${baseUrl}soffice.data.gz.${chunk}`, init);
+      if (!res.ok) throw new Error(`分片 ${chunk} 加载失败`);
+      buffers.push(await res.arrayBuffer());
+    }
+
+    // 合并分片
+    let total = 0;
+    buffers.forEach(b => total += b.byteLength);
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const b of buffers) {
+      merged.set(new Uint8Array(b), offset);
+      offset += b.byteLength;
+    }
+
+    return new Response(merged.buffer, {
+      headers: {
+        'Content-Type': 'application/octet-stream'
+      }
+    });
+  }
+
+  return originalFetch(input, init);
+};
+
+
+
+
+
+
 import { categories } from './config/tools.js';
 import { dom, switchView, hideAlert } from './ui.js';
 import { ShortcutsManager } from './logic/shortcuts.js';
