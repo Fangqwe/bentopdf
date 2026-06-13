@@ -1,3 +1,4 @@
+// scripts/split-wasm.js
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const WASM_FILE = path.join(__dirname, '../public/libreoffice-wasm/soffice.wasm.gz');
-const CHUNK_SIZE = 15 * 1024 * 1024; // 15MB per chunk (safe under 25MB limit)
+const CHUNK_SIZE = 15 * 1024 * 1024; // 15MB per chunk
 
 if (!fs.existsSync(WASM_FILE)) {
   console.error(`File not found: ${WASM_FILE}`);
@@ -32,10 +33,10 @@ for (let i = 0; i < numChunks; i++) {
   console.log(`  Created: soffice.wasm.gz.${chunkName} (${chunk.length} bytes, ${(chunk.length / 1024 / 1024).toFixed(2)} MB)`);
 }
 
-console.log('✅ WASM file splitting complete!');
-
-// 在 split-wasm.js 末尾添加
+// Optionally remove original file to save space
 if (process.env.NODE_ENV === 'production') {
   fs.unlinkSync(WASM_FILE);
   console.log(`Removed original file: ${WASM_FILE}`);
 }
+
+console.log('✅ WASM file splitting complete!');
