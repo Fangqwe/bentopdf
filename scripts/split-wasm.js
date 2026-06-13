@@ -1,4 +1,3 @@
-// scripts/split-wasm.js
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,13 +5,14 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 源文件在 public 目录
 const WASM_FILE = path.join(__dirname, '../public/libreoffice-wasm/soffice.wasm.gz');
 const CHUNK_SIZE = 15 * 1024 * 1024; // 15MB per chunk
 
 if (!fs.existsSync(WASM_FILE)) {
   console.error(`File not found: ${WASM_FILE}`);
-  process.exit(1);
+  // 如果文件不存在，可能是已经被分片过了，跳过
+  console.log('WASM file already split or not found, skipping...');
+  process.exit(0);
 }
 
 const fileBuffer = fs.readFileSync(WASM_FILE);
@@ -21,11 +21,8 @@ const numChunks = Math.ceil(fileSize / CHUNK_SIZE);
 
 console.log(`Splitting ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)} MB) into ${numChunks} chunks of ~${CHUNK_SIZE / 1024 / 1024} MB`);
 
-// 确保目标目录存在
-const distWasmDir = path.join(__dirname, '../dist/libreoffice-wasm');
-if (!fs.existsSync(distWasmDir)) {
-  fs.mkdirSync(distWasmDir, { recursive: true });
-}
+// 输出到 public 目录
+const outputDir = path.join(__dirname, '../public/libreoffice-wasm');
 
 // Generate chunk names: aa, ab, ac, ad, ...
 for (let i = 0; i < numChunks; i++) {
@@ -38,8 +35,7 @@ for (let i = 0; i < numChunks; i++) {
   const secondChar = String.fromCharCode(97 + (i % 26));
   const chunkName = firstChar + secondChar;
   
-  // 直接输出到 dist 目录
-  const outputFile = path.join(distWasmDir, `soffice.wasm.gz.${chunkName}`);
+  const outputFile = path.join(outputDir, `soffice.wasm.gz.${chunkName}`);
   
   fs.writeFileSync(outputFile, chunk);
   console.log(`  Created: soffice.wasm.gz.${chunkName} (${chunk.length} bytes, ${(chunk.length / 1024 / 1024).toFixed(2)} MB)`);
@@ -63,11 +59,27 @@ if (fs.existsSync(DATA_FILE)) {
     const secondChar = String.fromCharCode(97 + (i % 26));
     const chunkName = firstChar + secondChar;
     
-    const outputFile = path.join(distWasmDir, `soffice.data.gz.${chunkName}`);
+    const outputFile = path.join(outputDir, `soffice.data.gz.${chunkName}`);
     
     fs.writeFileSync(outputFile, chunk);
     console.log(`  Created: soffice.data.gz.${chunkName} (${chunk.length} bytes, ${(chunk.length / 1024 / 1024).toFixed(2)} MB)`);
   }
+  
+  // 删除原始 data 文件
+  try {
+    fs.unlinkSync(DATA_FILE);
+    console.log(`  Removed original: soffice.data.gz`);
+  } catch (err) {
+    console.warn(`  Could not remove original data file: ${err.message}`);
+  }
+}
+
+// 删除原始 wasm 文件
+try {
+  fs.unlinkSync(WASM_FILE);
+  console.log(`\n✅ Removed original file: soffice.wasm.gz`);
+} catch (err) {
+  console.warn(`Could not remove original wasm file: ${err.message}`);
 }
 
 console.log('\n✅ WASM file splitting complete!');
