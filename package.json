@@ -163,3 +163,10 @@
     "esbuild": "^0.25.0"
   }
 }
+
+{
+  "scripts": {
+    "split-wasm": "node scripts/split-wasm.js",
+    "build": "tsc && vite build && npm run split-wasm && NODE_OPTIONS='--max-old-space-size=3072' node scripts/generate-i18n-pages.mjs && node scripts/generate-sitemap.mjs && node scripts/generate-security-headers.mjs && node scripts/seo-audit.mjs"
+  }
+}

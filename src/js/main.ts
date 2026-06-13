@@ -13,13 +13,16 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
   }
 
   const targetName = 'soffice.data.gz';
+  const wasmTargetName = 'soffice.wasm.gz';
+  
+  // 处理 soffice.data.gz 分片
   if (reqUrl.includes(targetName)) {
     const baseUrl = reqUrl.replace(targetName, '');
     const chunks = ['aa', 'ab'];
     const buffers: ArrayBuffer[] = [];
 
     for (const chunk of chunks) {
-      const res = await originalFetch(`${baseUrl}soffice.data.gz.${chunk}`, init);
+      const res = await originalFetch(`${baseUrl}${targetName}.${chunk}`, init);
       if (!res.ok) throw new Error(`分片 ${chunk} 加载失败`);
       buffers.push(await res.arrayBuffer());
     }
@@ -39,10 +42,46 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
       }
     });
   }
+  
+  // 处理 soffice.wasm.gz 分片
+  if (reqUrl.includes(wasmTargetName)) {
+    const baseUrl = reqUrl.replace(wasmTargetName, '');
+    // 根据实际文件大小确定分片数量和名称
+    // 46.5 MB / 25 MB ≈ 2 个分片不够（需要3个）
+    const chunks = ['aa', 'ab', 'ac']; // 3个分片，每个约15.5MB
+    const buffers: ArrayBuffer[] = [];
+
+    for (const chunk of chunks) {
+      const chunkUrl = `${baseUrl}${wasmTargetName}.${chunk}`;
+      console.log(`[Fetch] Loading WASM chunk: ${chunkUrl}`);
+      const res = await originalFetch(chunkUrl, init);
+      if (!res.ok) {
+        throw new Error(`WASM分片 ${chunk} 加载失败: ${res.status}`);
+      }
+      buffers.push(await res.arrayBuffer());
+    }
+
+    let total = 0;
+    buffers.forEach(b => total += b.byteLength);
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const b of buffers) {
+      merged.set(new Uint8Array(b), offset);
+      offset += b.byteLength;
+    }
+    
+    console.log(`[Fetch] WASM merged: ${total} bytes (${(total / 1024 / 1024).toFixed(2)} MB)`);
+
+    return new Response(merged.buffer, {
+      headers: {
+        'Content-Type': 'application/wasm',
+        'Content-Encoding': 'gzip'
+      }
+    });
+  }
 
   return originalFetch(input, init);
 };
-
 
 
 
