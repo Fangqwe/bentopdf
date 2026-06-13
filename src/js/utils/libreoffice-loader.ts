@@ -31,29 +31,6 @@ export class LibreOfficeConverter {
     this.basePath = basePath || LIBREOFFICE_LOCAL_PATH;
   }
 
-  // 分片加载并合并 soffice.data.gz
-  private async loadSplitData(): Promise<ArrayBuffer> {
-    const chunks = ['aa', 'ab'];
-    const buffers: ArrayBuffer[] = [];
-
-    for (const chunk of chunks) {
-      const res = await fetch(`${this.basePath}soffice.data.gz.${chunk}`);
-      if (!res.ok) throw new Error(`分片 ${chunk} 加载失败`);
-      buffers.push(await res.arrayBuffer());
-    }
-
-    // 合并分片数据
-    let totalSize = 0;
-    buffers.forEach(buf => totalSize += buf.byteLength);
-    const merged = new Uint8Array(totalSize);
-    let offset = 0;
-    for (const buf of buffers) {
-      merged.set(new Uint8Array(buf), offset);
-      offset += buf.byteLength;
-    }
-    return merged.buffer;
-  }
-
   async initialize(onProgress?: ProgressCallback): Promise<void> {
     if (this.initialized) return;
 
@@ -65,7 +42,7 @@ export class LibreOfficeConverter {
     }
 
     this.initializing = true;
-    let progressCallback = onProgress;
+    let progressCallback = onProgress; // Store original callback
 
     try {
       progressCallback?.({
@@ -74,13 +51,10 @@ export class LibreOfficeConverter {
         message: 'Loading conversion engine...',
       });
 
-      // 加载合并后的分片文件
-      const dataBuffer = await this.loadSplitData();
-
       this.converter = new WorkerBrowserConverter({
         sofficeJs: `${this.basePath}soffice.js`,
         sofficeWasm: `${this.basePath}soffice.wasm.gz`,
-        sofficeData: dataBuffer,
+        sofficeData: `${this.basePath}soffice.data.gz`,
         sofficeWorkerJs: `${this.basePath}soffice.worker.js`,
         browserWorkerJs: `${this.basePath}browser.worker.global.js`,
         verbose: false,
@@ -106,15 +80,17 @@ export class LibreOfficeConverter {
         },
       });
 
-      await this.converter.initialize();
+     await (this.converter.initialize() as Promise<void>);
       this.initialized = true;
 
+      // Call completion message
       progressCallback?.({
         phase: 'ready',
         percent: 100,
         message: 'Conversion engine ready!',
       });
 
+      // Null out the callback to prevent any late-firing progress updates
       progressCallback = undefined;
     } finally {
       this.initializing = false;
@@ -144,6 +120,7 @@ export class LibreOfficeConverter {
       console.log(`[LibreOffice] Calling converter.convert() with buffer...`);
       const startTime = Date.now();
 
+      // Detect input format - critical for CSV to apply import filters
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       console.log(`[LibreOffice] Detected format from extension: ${ext}`);
 
@@ -161,6 +138,7 @@ export class LibreOfficeConverter {
         `[LibreOffice] Conversion complete! Duration: ${duration}ms, Size: ${result.data.length} bytes`
       );
 
+      // Create a copy to avoid SharedArrayBuffer type issues
       const data = new Uint8Array(result.data);
       return new Blob([data], { type: result.mimeType });
     } catch (error) {
