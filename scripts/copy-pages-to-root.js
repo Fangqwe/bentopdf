@@ -47,21 +47,25 @@ if (fs.existsSync(srcPagesDir)) {
     const srcPath = path.join(srcPagesDir, file);
     let content = fs.readFileSync(srcPath, 'utf8');
     
-    // 修复 JS 引用
+    // 移除所有 TypeScript 模块导入
+    content = content.replace(/<script[^>]*type="module"[^>]*src="\/src\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
+    content = content.replace(/<script[^>]*type="module"[^>]*src="\.\.\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
+    content = content.replace(/<script[^>]*src="\/src\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
+    content = content.replace(/<script[^>]*src="\.\.\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
+    
+    // 添加正确的 script 标签
     if (actualJsFile) {
-      content = content.replace(/src="\/src\/js\/main\.ts"/g, `src="${actualJsFile}"`);
-      content = content.replace(/src="\.\.\/js\/main\.ts"/g, `src="${actualJsFile}"`);
+      // 在 body 末尾添加 script 标签
+      const scriptTag = `<script type="module" src="${actualJsFile}"></script>`;
+      content = content.replace('</body>', `${scriptTag}\n</body>`);
     }
     
     // 修复 CSS 引用
     if (actualCssFile) {
       content = content.replace(/href="\.\.\/css\/styles\.css"/g, `href="${actualCssFile}"`);
       content = content.replace(/href="\/src\/css\/styles\.css"/g, `href="${actualCssFile}"`);
+      content = content.replace(/href="\.\.\/\.\.\/css\/styles\.css"/g, `href="${actualCssFile}"`);
     }
-    
-    // 移除所有其他 TypeScript 引用（它们已经被打包到 main.js 中）
-    content = content.replace(/<script[^>]*src="\/src\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
-    content = content.replace(/<script[^>]*src="\.\.\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
     
     const destPath = path.join(distDir, file);
     fs.writeFileSync(destPath, content);
@@ -69,6 +73,4 @@ if (fs.existsSync(srcPagesDir)) {
   }
   
   console.log('✅ All pages fixed!');
-} else {
-  console.log('src/pages directory not found');
 }
