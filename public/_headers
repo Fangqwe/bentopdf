@@ -24,3 +24,12 @@
 # Service worker
 /sw.js
   Cache-Control: no-cache
+  
+  /libreoffice-wasm/*
+  Content-Type: application/octet-stream
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=31536000, immutable
+
+/libreoffice-wasm/*.gz.*
+  Content-Type: application/wasm
+  Content-Encoding: gzip

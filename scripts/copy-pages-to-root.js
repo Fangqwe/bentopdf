@@ -7,37 +7,36 @@ const __dirname = path.dirname(__filename);
 
 const distDir = path.join(__dirname, '../dist');
 const srcPagesDir = path.join(__dirname, '../src/pages');
+const indexPath = path.join(__dirname, 'index.html');
 
-// 获取实际生成的 JS 文件
-function getActualJsFile() {
-  if (!fs.existsSync(distDir)) return null;
-  const assetsDir = path.join(distDir, 'assets');
-  if (!fs.existsSync(assetsDir)) return null;
-  const files = fs.readdirSync(assetsDir);
-  const jsFile = files.find(f => f.startsWith('main-') && f.endsWith('.js'));
-  return jsFile ? `/assets/${jsFile}` : null;
-}
-
-// 获取实际生成的 CSS 文件
-function getActualCssFile() {
-  if (!fs.existsSync(distDir)) return null;
-  const assetsDir = path.join(distDir, 'assets');
-  if (!fs.existsSync(assetsDir)) return null;
-  const files = fs.readdirSync(assetsDir);
-  const cssFile = files.find(f => f.startsWith('style-') && f.endsWith('.css'));
-  return cssFile ? `/assets/${cssFile}` : null;
+// 从 index.html 提取正确的脚本和样式引用
+function getCorrectAssets() {
+  if (!fs.existsSync(indexPath)) {
+    console.error('index.html not found!');
+    return { jsFile: null, cssFile: null };
+  }
+  
+  const indexContent = fs.readFileSync(indexPath, 'utf8');
+  
+  // 提取 script 标签
+  const scriptMatch = indexContent.match(/<script[^>]*type="module"[^>]*src="([^"]+)"[^>]*>/);
+  // 提取 link 标签
+  const cssMatch = indexContent.match(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/);
+  
+  return {
+    jsFile: scriptMatch ? scriptMatch[1] : null,
+    cssFile: cssMatch ? cssMatch[1] : null
+  };
 }
 
 if (!fs.existsSync(distDir)) {
-  console.error('dist directory not found!');
+  console.error('dist directory not found! Run build first.');
   process.exit(1);
 }
 
-const actualJsFile = getActualJsFile();
-const actualCssFile = getActualCssFile();
-
-console.log(`Actual JS file: ${actualJsFile}`);
-console.log(`Actual CSS file: ${actualCssFile}`);
+const { jsFile, cssFile } = getCorrectAssets();
+console.log(`JS file from index: ${jsFile}`);
+console.log(`CSS file from index: ${cssFile}`);
 
 if (fs.existsSync(srcPagesDir)) {
   const files = fs.readdirSync(srcPagesDir);
@@ -47,24 +46,18 @@ if (fs.existsSync(srcPagesDir)) {
     const srcPath = path.join(srcPagesDir, file);
     let content = fs.readFileSync(srcPath, 'utf8');
     
-    // 移除所有 TypeScript 模块导入
-    content = content.replace(/<script[^>]*type="module"[^>]*src="\/src\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
-    content = content.replace(/<script[^>]*type="module"[^>]*src="\.\.\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
-    content = content.replace(/<script[^>]*src="\/src\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
-    content = content.replace(/<script[^>]*src="\.\.\/js\/[^"]*\.ts"[^>]*><\/script>/g, '');
+    // 移除所有现有的 script 标签
+    content = content.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
+    content = content.replace(/<link[^>]*rel="stylesheet"[^>]*>/g, '');
     
-    // 添加正确的 script 标签
-    if (actualJsFile) {
-      // 在 body 末尾添加 script 标签
-      const scriptTag = `<script type="module" src="${actualJsFile}"></script>`;
-      content = content.replace('</body>', `${scriptTag}\n</body>`);
+    // 添加正确的 CSS
+    if (cssFile) {
+      content = content.replace('</head>', `<link rel="stylesheet" href="${cssFile}">\n</head>`);
     }
     
-    // 修复 CSS 引用
-    if (actualCssFile) {
-      content = content.replace(/href="\.\.\/css\/styles\.css"/g, `href="${actualCssFile}"`);
-      content = content.replace(/href="\/src\/css\/styles\.css"/g, `href="${actualCssFile}"`);
-      content = content.replace(/href="\.\.\/\.\.\/css\/styles\.css"/g, `href="${actualCssFile}"`);
+    // 添加正确的 JS
+    if (jsFile) {
+      content = content.replace('</body>', `<script type="module" src="${jsFile}"></script>\n</body>`);
     }
     
     const destPath = path.join(distDir, file);
