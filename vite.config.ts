@@ -507,53 +507,56 @@ export default defineConfig(() => {
   return {
     base: (process.env.BASE_URL || '/').replace(/\/?$/, '/'),
     plugins: [
-      handlebars({
-  partialDirectory: resolve(__dirname, 'src/partials'),
-  context: {
-    // ... context 配置
-  },
-  // 添加这个配置，处理所有 HTML 文件
-  reloadOnPartialChange: true,
-}),
-      }),
-      languageRouterPlugin(),
-      flattenPagesPlugin(),
-      rewriteHtmlPathsPlugin(),
-      tailwindcss(),
-      nodePolyfills({
-        include: ['buffer', 'stream', 'util', 'zlib', 'process'],
-        globals: {
-          Buffer: true,
-          global: false,
-          process: true,
-        },
-      }),
-      viteStaticCopy({
-        targets: staticCopyTargets,
-      }),
-      removeLargeWasmFilesPlugin(),
-      viteCompression({
-        algorithm: 'brotliCompress',
-        ext: '.br',
-        threshold: 1024,
-        compressionOptions: {
-          params: {
-            [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-            [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
-          },
-        },
-        deleteOriginFile: false,
-      }),
-      viteCompression({
-        algorithm: 'gzip',
-        ext: '.gz',
-        threshold: 1024,
-        compressionOptions: {
-          level: 9,
-        },
-        deleteOriginFile: false,
-      }),
-    ],
+  handlebars({
+    partialDirectory: resolve(__dirname, 'src/partials'),
+    context: {
+      baseUrl: (process.env.BASE_URL || '/').replace(/\/?$/, '/'),
+      simpleMode: process.env.SIMPLE_MODE === 'true',
+      brandName: process.env.VITE_BRAND_NAME || '',
+      brandLogo: process.env.VITE_BRAND_LOGO || '',
+      footerText: process.env.VITE_FOOTER_TEXT || '',
+      appVersion: process.env.npm_package_version || 'Unknown',
+    },
+    reloadOnPartialChange: true,
+  }),
+  languageRouterPlugin(),
+  flattenPagesPlugin(),
+  rewriteHtmlPathsPlugin(),
+  tailwindcss(),
+  nodePolyfills({
+    include: ['buffer', 'stream', 'util', 'zlib', 'process'],
+    globals: {
+      Buffer: true,
+      global: false,
+      process: true,
+    },
+  }),
+  viteStaticCopy({
+    targets: staticCopyTargets,
+  }),
+  removeLargeWasmFilesPlugin(),
+  viteCompression({
+    algorithm: 'brotliCompress',
+    ext: '.br',
+    threshold: 1024,
+    compressionOptions: {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+      },
+    },
+    deleteOriginFile: false,
+  }),
+  viteCompression({
+    algorithm: 'gzip',
+    ext: '.gz',
+    threshold: 1024,
+    compressionOptions: {
+      level: 9,
+    },
+    deleteOriginFile: false,
+  }),
+],
     define: {
       __SIMPLE_MODE__: JSON.stringify(process.env.SIMPLE_MODE === 'true'),
       __BRAND_NAME__: JSON.stringify(process.env.VITE_BRAND_NAME || ''),
