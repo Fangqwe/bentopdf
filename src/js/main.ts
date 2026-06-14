@@ -1273,3 +1273,125 @@ const init = async () => {
 };
 
 window.addEventListener('load', init);
+
+// 暴露 LibreOffice 转换器到全局
+import { getLibreOfficeConverter, LibreOfficeConverter } from './utils/libreoffice-loader';
+
+// 挂载到 window 对象上，方便调试和调用
+(window as any).LibreOffice = {
+  getConverter: getLibreOfficeConverter,
+  Converter: LibreOfficeConverter
+};
+
+console.log('LibreOffice converter exposed to window.LibreOffice');
+
+// 等待 DOM 加载完成
+document.addEventListener('DOMContentLoaded', () => {
+  // 获取转换相关的元素
+  const processBtn = document.getElementById('process-btn');
+  const fileInput = document.querySelector('#file-input, input[type="file"]') as HTMLInputElement;
+  const addMoreBtn = document.getElementById('add-more-btn');
+  const clearBtn = document.getElementById('clear-files-btn');
+  const fileListDiv = document.getElementById('file-list');
+  
+  let selectedFiles: File[] = [];
+  
+  // 更新文件列表显示
+  function updateFileList() {
+    if (fileListDiv) {
+      if (selectedFiles.length === 0) {
+        fileListDiv.innerHTML = '<div class="text-gray-400 text-sm">未选择文件</div>';
+      } else {
+        fileListDiv.innerHTML = selectedFiles.map(f => `
+          <div class="flex justify-between items-center p-2 bg-gray-700 rounded mb-1">
+            <span class="text-sm truncate">${f.name}</span>
+            <span class="text-xs text-gray-400">${(f.size / 1024).toFixed(1)} KB</span>
+          </div>
+        `).join('');
+      }
+    }
+  }
+  
+  // 文件选择处理
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from((e.target as HTMLInputElement).files || []);
+      selectedFiles.push(...files);
+      updateFileList();
+    });
+  }
+  
+  // 添加更多文件
+  if (addMoreBtn) {
+    addMoreBtn.addEventListener('click', () => {
+      if (fileInput) fileInput.click();
+    });
+  }
+  
+  // 清空文件
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      selectedFiles = [];
+      if (fileInput) fileInput.value = '';
+      updateFileList();
+    });
+  }
+  
+  // 转换按钮处理
+  if (processBtn) {
+    processBtn.addEventListener('click', async () => {
+      if (selectedFiles.length === 0) {
+        alert('请先选择文件');
+        return;
+      }
+      
+      const modal = document.getElementById('loader-modal');
+      const progressBar = document.getElementById('progress-bar');
+      const progressText = document.getElementById('progress-text');
+      
+      if (modal) modal.classList.remove('hidden');
+      
+      try {
+        // 动态导入转换器 - 使用正确的路径
+        const { getLibreOfficeConverter } = await import('./utils/libreoffice-loader');
+        const converter = getLibreOfficeConverter();
+        
+        // 显示初始化进度
+        if (progressText) progressText.textContent = '正在加载转换引擎...';
+        
+        await converter.initialize((progress) => {
+          console.log(`加载进度: ${progress.percent}%`);
+          if (progressBar) progressBar.style.width = `${progress.percent}%`;
+          if (progressText) progressText.textContent = progress.message;
+        });
+        
+        // 转换每个文件
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          if (progressText) progressText.textContent = `正在转换: ${file.name}`;
+          
+          console.log(`转换文件: ${file.name}`);
+          const pdfBlob = await converter.convertToPdf(file);
+          
+          // 下载 PDF
+          const url = URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name.replace(/\.(docx?|odt|rtf)$/i, '.pdf');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+        
+        if (modal) modal.classList.add('hidden');
+        alert('转换完成！');
+        
+      } catch (error) {
+        console.error('转换失败:', error);
+        if (modal) modal.classList.add('hidden');
+        alert('转换失败: ' + (error as Error).message);
+      }
+    });
+  }
+});

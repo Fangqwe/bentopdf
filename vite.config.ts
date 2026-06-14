@@ -576,9 +576,13 @@ export default defineConfig(() => {
       },
     },
     optimizeDeps: {
-      include: ['pdfkit', 'blob-stream'],
-      exclude: ['coherentpdf', 'wasm-vips'],
-    },
+     include: [
+    'pdfkit', 
+    'blob-stream',
+    '@matbee/libreoffice-converter/browser'
+  ],
+  exclude: ['coherentpdf', 'wasm-vips'],
+},
     server: {
       host: process.env.VITE_DEV_HOST || 'localhost',
       headers: {
@@ -640,3 +644,4 @@ export default defineConfig(() => {
     },
   };
 });
+
