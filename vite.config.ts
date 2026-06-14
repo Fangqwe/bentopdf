@@ -369,37 +369,34 @@ function flattenPagesPlugin(): Plugin {
       const outDir = options.dir;
       if (!outDir) return;
 
-      const moves: Array<{ from: string; to: string }> = [];
-
-      for (const fileName of Object.keys(bundle)) {
-        if (fileName.startsWith('src/pages/') && fileName.endsWith('.html')) {
-          moves.push({
-            from: fileName,
-            to: fileName.replace('src/pages/', ''),
-          });
+      // 移动 src/pages/*.html 到根目录
+      const srcPagesDir = resolve(outDir, 'src/pages');
+      if (fs.existsSync(srcPagesDir)) {
+        const files = fs.readdirSync(srcPagesDir);
+        for (const file of files) {
+          if (file.endsWith('.html')) {
+            const oldPath = resolve(srcPagesDir, file);
+            const newPath = resolve(outDir, file);
+            if (fs.existsSync(oldPath)) {
+              fs.renameSync(oldPath, newPath);
+              console.log(`[flatten] Moved ${file} to root`);
+            }
+          }
         }
+        // 删除空目录
+        try { fs.rmdirSync(srcPagesDir); } catch(e) {}
       }
-
-      if (process.env.SIMPLE_MODE === 'true' && bundle['simple-index.html']) {
-        moves.push({ from: 'simple-index.html', to: 'index.html' });
-      }
-
-      for (const { from, to } of moves) {
-        const oldPath = resolve(outDir, from);
-        const newPath = resolve(outDir, to);
-        if (!fs.existsSync(oldPath)) continue;
-        fs.mkdirSync(resolve(newPath, '..'), { recursive: true });
-        if (fs.existsSync(newPath)) fs.rmSync(newPath, { force: true });
-        fs.renameSync(oldPath, newPath);
-      }
-
-      const pagesDir = resolve(outDir, 'src/pages');
-      if (fs.existsSync(pagesDir) && fs.readdirSync(pagesDir).length === 0) {
-        fs.rmdirSync(pagesDir);
-      }
-      const srcDir = resolve(outDir, 'src');
-      if (fs.existsSync(srcDir) && fs.readdirSync(srcDir).length === 0) {
-        fs.rmdirSync(srcDir);
+      
+      // 同时确保根目录的 HTML 文件存在
+      const rootHtmlFiles = ['about.html', 'contact.html', 'faq.html', 'privacy.html', 'terms.html', 'licensing.html', 'tools.html', '404.html'];
+      for (const file of rootHtmlFiles) {
+        const srcPath = resolve(outDir, file);
+        if (!fs.existsSync(srcPath)) {
+          const altPath = resolve(outDir, `src/${file}`);
+          if (fs.existsSync(altPath)) {
+            fs.renameSync(altPath, srcPath);
+          }
+        }
       }
     },
   };
