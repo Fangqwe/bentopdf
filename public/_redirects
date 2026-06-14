@@ -1,1 +1,10 @@
 /*    /index.html   200
+# 将所有工具页面重定向到 src/pages
+/word-to-pdf.html      /src/pages/word-to-pdf.html      200
+/merge-pdf.html        /src/pages/merge-pdf.html        200
+/split-pdf.html        /src/pages/split-pdf.html        200
+/compress-pdf.html     /src/pages/compress-pdf.html     200
+/edit-pdf.html         /src/pages/edit-pdf.html         200
+/jpg-to-pdf.html       /src/pages/jpg-to-pdf.html       200
+/sign-pdf.html         /src/pages/sign-pdf.html         200
+/crop-pdf.html         /src/pages/crop-pdf.html         200
