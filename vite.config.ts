@@ -508,15 +508,13 @@ export default defineConfig(() => {
     base: (process.env.BASE_URL || '/').replace(/\/?$/, '/'),
     plugins: [
       handlebars({
-        partialDirectory: resolve(__dirname, 'src/partials'),
-        context: {
-          baseUrl: (process.env.BASE_URL || '/').replace(/\/?$/, '/'),
-          simpleMode: process.env.SIMPLE_MODE === 'true',
-          brandName: process.env.VITE_BRAND_NAME || '',
-          brandLogo: process.env.VITE_BRAND_LOGO || '',
-          footerText: process.env.VITE_FOOTER_TEXT || '',
-          appVersion: process.env.npm_package_version || 'Unknown',
-        },
+  partialDirectory: resolve(__dirname, 'src/partials'),
+  context: {
+    // ... context 配置
+  },
+  // 添加这个配置，处理所有 HTML 文件
+  reloadOnPartialChange: true,
+}),
       }),
       languageRouterPlugin(),
       flattenPagesPlugin(),
