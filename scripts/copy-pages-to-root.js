@@ -1,51 +1,76 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import Handlebars from 'handlebars';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const distDir = path.join(__dirname, '../dist');
 const srcPagesDir = path.join(__dirname, '../src/pages');
+const partialsDir = path.join(__dirname, '../src/partials');
 
-// 等待 dist 目录存在
-if (!fs.existsSync(distDir)) {
-  console.error('dist directory not found!');
-  process.exit(1);
+// 注册所有 partials
+function registerPartials() {
+  if (fs.existsSync(partialsDir)) {
+    const partialFiles = fs.readdirSync(partialsDir);
+    for (const file of partialFiles) {
+      if (file.endsWith('.html')) {
+        const name = file.replace('.html', '');
+        const content = fs.readFileSync(path.join(partialsDir, file), 'utf8');
+        Handlebars.registerPartial(name, content);
+        console.log(`Registered partial: ${name}`);
+      }
+    }
+  }
 }
 
-// 复制 src/pages 下的所有 HTML 文件到 dist 根目录
-if (fs.existsSync(srcPagesDir)) {
+// 复制并编译页面
+function copyAndCompilePages() {
+  registerPartials();
+  
+  if (!fs.existsSync(distDir)) {
+    console.error('dist directory not found!');
+    process.exit(1);
+  }
+  
+  if (!fs.existsSync(srcPagesDir)) {
+    console.error('src/pages directory not found!');
+    process.exit(1);
+  }
+  
   const files = fs.readdirSync(srcPagesDir);
   const htmlFiles = files.filter(f => f.endsWith('.html'));
   
-  console.log(`Copying ${htmlFiles.length} pages from src/pages to dist root...`);
+  console.log(`Processing ${htmlFiles.length} pages with Handlebars...`);
+  
+  // 公共 context
+  const context = {
+    baseUrl: '/',
+    simpleMode: false,
+    brandName: 'BentoPDF',
+    brandLogo: '',
+    footerText: '',
+    appVersion: '2.8.5',
+  };
   
   for (const file of htmlFiles) {
     const srcPath = path.join(srcPagesDir, file);
     const destPath = path.join(distDir, file);
     
-    // 读取文件内容
-    let content = fs.readFileSync(srcPath, 'utf8');
+    // 读取模板
+    const templateContent = fs.readFileSync(srcPath, 'utf8');
     
-    // 修复资源路径（关键！）
-    content = content.replace(/src="\.\.\/\.\.\/assets\//g, 'src="/assets/');
-    content = content.replace(/href="\.\.\/\.\.\/assets\//g, 'href="/assets/');
-    content = content.replace(/src="\.\.\/assets\//g, 'src="/assets/');
-    content = content.replace(/href="\.\.\/assets\//g, 'href="/assets/');
-    content = content.replace(/src="\.\.\/\.\.\/js\//g, 'src="/js/');
-    content = content.replace(/href="\.\.\/\.\.\/css\//g, 'href="/css/');
+    // 编译 Handlebars
+    const template = Handlebars.compile(templateContent);
+    const compiledContent = template(context);
     
-    fs.writeFileSync(destPath, content);
-    console.log(`  ✓ Copied: ${file}`);
+    // 写入编译后的内容
+    fs.writeFileSync(destPath, compiledContent);
+    console.log(`  ✓ Compiled and copied: ${file}`);
   }
   
-  console.log('✅ All pages copied to dist root!');
-} else {
-  console.log('src/pages directory not found');
+  console.log(`✅ All pages compiled and copied to dist root!`);
 }
 
-// 列出 dist 根目录的 HTML 文件
-const distFiles = fs.readdirSync(distDir).filter(f => f.endsWith('.html'));
-console.log(`\nHTML files in dist root: ${distFiles.length}`);
-console.log(distFiles.slice(0, 20).join(', '));
+copyAndCompilePages();
